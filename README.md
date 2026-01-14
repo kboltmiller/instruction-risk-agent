@@ -59,11 +59,12 @@ Example Response
 }
 ________________________________________
 Current Status
-•	✅ FastAPI service live (pilot)
-•	✅ Heuristic-based risk detection
-•	🔜 x402 payment gating
-•	🔜 Expanded heuristics + transparency
-•	🔜 Audio / read-aloud support for accessibility
+✅ FastAPI service live (pilot)
+✅ Heuristic-based risk detection
+✅ Mitigation considerations surfaced (non-prescriptive)
+🔜 x402 payment gating
+🔜 Expanded heuristics + transparency
+🔜 Audio / read-aloud support for accessibility
 This is an experimental project and will evolve.
 ________________________________________
 Intended Use Cases
