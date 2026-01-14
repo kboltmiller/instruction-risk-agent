@@ -36,11 +36,13 @@ class IdentifiedRisk:
 class EvaluationResult:
     def __init__(self, risk_level: str, confidence: float,
                  identified_risks: List[IdentifiedRisk],
-                 missing_safeguards: List[str]):
+                 missing_safeguards: List[str],
+                 mitigation_considerations: List[str]):
         self.risk_level = risk_level
         self.confidence = confidence
         self.identified_risks = identified_risks
         self.missing_safeguards = missing_safeguards
+        self.mitigation_considerations = mitigation_considerations
 
 
 # -----------------------------
@@ -55,6 +57,7 @@ def evaluate_instructions(text: str) -> EvaluationResult:
 
     risks: List[IdentifiedRisk] = []
     safeguards: List[str] = []
+    mitigations: List[str] = []
 
     lowered = text.lower()
 
@@ -65,6 +68,9 @@ def evaluate_instructions(text: str) -> EvaluationResult:
                 risk="Assumes the user knows what an account is and which credentials to use."
             )
         )
+        mitigations.append(
+            "Consider clarifying what account is being referenced and what credentials are needed."
+        )
 
     if "settings" in lowered:
         risks.append(
@@ -72,6 +78,9 @@ def evaluate_instructions(text: str) -> EvaluationResult:
                 step="settings navigation",
                 risk="Settings menus vary by device and may be difficult to navigate."
             )
+        )
+        mitigations.append(
+            "Consider acknowledging that menu names or locations may vary by device."
         )
 
     if any(term in lowered for term in ["reset", "factory", "delete", "erase"]):
@@ -81,6 +90,9 @@ def evaluate_instructions(text: str) -> EvaluationResult:
                 risk="Language suggests irreversible changes and may cause fear or hesitation."
             )
         )
+        mitigations.append(
+            "Consider reassuring users about what will and will not be affected by this action."
+        )
 
     if "password" in lowered:
         risks.append(
@@ -89,12 +101,21 @@ def evaluate_instructions(text: str) -> EvaluationResult:
                 risk="Password entry is error-prone, especially with remotes or on-screen keyboards."
             )
         )
+        mitigations.append(
+            "Consider noting that text entry may be challenging and errors are common."
+        )
 
     if "select" in lowered and not any(t in lowered for t in ["back", "cancel", "undo"]):
         safeguards.append("No recovery path provided for mistaken selections")
+        mitigations.append(
+            "Consider indicating whether users can reverse or cancel this action if needed."
+        )
 
     if not any(t in lowered for t in ["success", "connected", "failed", "error"]):
         safeguards.append("No success or failure confirmation described")
+        mitigations.append(
+            "Consider explaining how users will know whether the action succeeded or failed."
+        )
 
     if len(risks) >= 3:
         risk_level = "high"
@@ -111,6 +132,7 @@ def evaluate_instructions(text: str) -> EvaluationResult:
         confidence=confidence,
         identified_risks=risks,
         missing_safeguards=safeguards,
+        mitigation_considerations=mitigations,
     )
 
 
@@ -147,6 +169,7 @@ if FASTAPI_AVAILABLE:
         confidence: float
         identified_risks: List[IdentifiedRiskModel]
         missing_safeguards: List[str]
+        mitigation_considerations: List[str]
 
     @app.post("/evaluate", response_model=EvaluationResponse)
     async def evaluate(request: InstructionRequest):
@@ -160,6 +183,7 @@ if FASTAPI_AVAILABLE:
             confidence=result.confidence,
             identified_risks=[IdentifiedRiskModel(**r.dict()) for r in result.identified_risks],
             missing_safeguards=result.missing_safeguards,
+            mitigation_considerations=result.mitigation_considerations,
         )
 
     @app.get("/health")
@@ -172,16 +196,20 @@ if FASTAPI_AVAILABLE:
 # -----------------------------
 
 if __name__ == "__main__":
-    # Simple sanity tests without FastAPI
-
     text = "Go to settings and reset your Wi-Fi password."
     result = evaluate_instructions(text)
 
     assert result.risk_level in {"low", "medium", "high"}
     assert len(result.identified_risks) >= 2
     assert isinstance(result.missing_safeguards, list)
+    assert isinstance(result.mitigation_considerations, list)
 
     print("Local evaluation test passed.")
     print("Risk level:", result.risk_level)
+
     for r in result.identified_risks:
         print("-", r.step, ":", r.risk)
+
+    print("\nMitigation considerations:")
+    for m in result.mitigation_considerations:
+        print("-", m)
