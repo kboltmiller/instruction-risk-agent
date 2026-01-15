@@ -46,13 +46,15 @@ class EvaluationResult:
 
 
 # -----------------------------
-# Core Evaluation Logic (v1)
+# Core Evaluation Logic (v2)
 # -----------------------------
 
 def evaluate_instructions(text: str) -> EvaluationResult:
     """
     Heuristic-based evaluator for instruction comprehension risk.
     Framework-independent and fully testable.
+    
+    v0.2.0: Enhanced heuristics with better cognitive load detection
     """
 
     risks: List[IdentifiedRisk] = []
@@ -61,6 +63,7 @@ def evaluate_instructions(text: str) -> EvaluationResult:
 
     lowered = text.lower()
 
+    # Account/credential complexity
     if any(term in lowered for term in ["account", "sign in", "log in"]):
         risks.append(
             IdentifiedRisk(
@@ -72,6 +75,7 @@ def evaluate_instructions(text: str) -> EvaluationResult:
             "Consider clarifying what account is being referenced and what credentials are needed."
         )
 
+    # Navigation complexity
     if "settings" in lowered:
         risks.append(
             IdentifiedRisk(
@@ -83,6 +87,7 @@ def evaluate_instructions(text: str) -> EvaluationResult:
             "Consider acknowledging that menu names or locations may vary by device."
         )
 
+    # Destructive action risk
     if any(term in lowered for term in ["reset", "factory", "delete", "erase"]):
         risks.append(
             IdentifiedRisk(
@@ -94,6 +99,7 @@ def evaluate_instructions(text: str) -> EvaluationResult:
             "Consider reassuring users about what will and will not be affected by this action."
         )
 
+    # Text entry challenges
     if "password" in lowered:
         risks.append(
             IdentifiedRisk(
@@ -105,18 +111,34 @@ def evaluate_instructions(text: str) -> EvaluationResult:
             "Consider noting that text entry may be challenging and errors are common."
         )
 
+    # Missing recovery paths
     if "select" in lowered and not any(t in lowered for t in ["back", "cancel", "undo"]):
         safeguards.append("No recovery path provided for mistaken selections")
         mitigations.append(
             "Consider indicating whether users can reverse or cancel this action if needed."
         )
 
+    # Missing confirmation feedback
     if not any(t in lowered for t in ["success", "connected", "failed", "error"]):
         safeguards.append("No success or failure confirmation described")
         mitigations.append(
             "Consider explaining how users will know whether the action succeeded or failed."
         )
 
+    # Cognitive overload detection (v0.2.0 enhancement)
+    step_count = text.count('.') + text.count('\n') + 1
+    if step_count > 5:
+        risks.append(
+            IdentifiedRisk(
+                step="cognitive load",
+                risk="Multiple steps may overwhelm users, especially those with limited technical experience."
+            )
+        )
+        mitigations.append(
+            "Consider breaking instructions into smaller, numbered steps or providing visual aids."
+        )
+
+    # Risk level calculation
     if len(risks) >= 3:
         risk_level = "high"
         confidence = 0.82
@@ -152,13 +174,13 @@ except ModuleNotFoundError:
 if FASTAPI_AVAILABLE:
 
     app = FastAPI(
-        title="Instruction Comprehension Risk Agent",
-        description="Evaluates written instructions for potential comprehension risks.",
-        version="0.1.0",
+        title="Instruction Risk Agent",
+        description="Analyzes technical or procedural instructions and flags potential comprehension, safety, and execution risks.",
+        version="0.2.0",
     )
 
     class InstructionRequest(BaseModel):
-        instructions: str = Field(..., description="Instructions to evaluate")
+        instructions: str = Field(..., description="Instructions to evaluate for potential risks")
 
     class IdentifiedRiskModel(BaseModel):
         step: Optional[str]
@@ -173,6 +195,16 @@ if FASTAPI_AVAILABLE:
 
     @app.post("/evaluate", response_model=EvaluationResponse)
     async def evaluate(request: InstructionRequest):
+        """
+        Evaluate instructions for comprehension, safety, and execution risks.
+        
+        Returns structured analysis including:
+        - Risk level (low/medium/high)
+        - Confidence score
+        - Identified risk factors
+        - Missing safeguards
+        - Mitigation considerations
+        """
         if not request.instructions.strip():
             raise HTTPException(status_code=400, detail="Instructions cannot be empty")
 
@@ -188,7 +220,8 @@ if FASTAPI_AVAILABLE:
 
     @app.get("/health")
     async def health():
-        return {"status": "ok"}
+        """Health check endpoint"""
+        return {"status": "ok", "version": "0.2.0"}
 
 
 # -----------------------------
